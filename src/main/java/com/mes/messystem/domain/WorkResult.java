@@ -23,5 +23,5 @@ public class WorkResult {
 
     private int badQty;
 
-    private LocalDateTime timestamp;
+    private LocalDateTime workTime;
 }
