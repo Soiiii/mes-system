@@ -32,7 +32,7 @@ public class WorkOrderService {
         WorkOrder wo = workOrderRepository.findById(id)
                 .orElseThrow();
 
-        wo.setStatus(WorkOrderStatus.DONE);
+        wo.setStatus(WorkOrderStatus.COMPLETED);
         return workOrderRepository.save(wo);
     }
 }

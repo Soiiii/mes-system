@@ -2,6 +2,8 @@ package com.mes.messystem.domain;
 
 public enum WorkOrderStatus {
     PLANNED,
+    STARTED,
     IN_PROGRESS,
-    DONE
+    COMPLETED,
+    REJECTED
 }

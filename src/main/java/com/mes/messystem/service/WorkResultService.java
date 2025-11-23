@@ -2,17 +2,21 @@ package com.mes.messystem.service;
 
 import com.mes.messystem.domain.ProcessEntity;
 import com.mes.messystem.domain.WorkOrder;
+import com.mes.messystem.domain.WorkOrderStatus;
 import com.mes.messystem.domain.WorkResult;
 import com.mes.messystem.repository.ProcessRepository;
 import com.mes.messystem.repository.WorkOrderRepository;
 import com.mes.messystem.repository.WorkResultRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WorkResultService {
@@ -21,6 +25,10 @@ public class WorkResultService {
     private final ProcessRepository processRepository;
     private final WorkResultRepository workResultRepository;
 
+    // Defect rate threshold (over than 30% REJECTED)
+    private static final double DEFECT_RATE_THRESHOLD = 0.30;
+
+    @Transactional
     public WorkResult completeProcess(Long workOrderId, Long processId, int goodQty, int badQty) {
         WorkOrder workOrder = workOrderRepository.findById(workOrderId)
                 .orElseThrow(() -> new RuntimeException("WorkOrder not found"));
@@ -49,6 +57,18 @@ public class WorkResultService {
             );
         }
 
+        // Check defect rate
+        double defectRate = calculateDefectRate(goodQty, badQty);
+        if (defectRate > DEFECT_RATE_THRESHOLD) {
+            workOrder.setStatus(WorkOrderStatus.REJECTED);
+            workOrderRepository.save(workOrder);
+            log.warn("WorkOrder {} REJECTED - Defect rate: {:.2f}%", workOrderId, defectRate * 100);
+            throw new IllegalArgumentException(
+                    String.format("Defect rate too high: %.2f%% (threshold: %.2f%%)",
+                            defectRate * 100, DEFECT_RATE_THRESHOLD * 100)
+            );
+        }
+
         // Save WorkResult
         WorkResult result = WorkResult.builder()
                 .workOrder(workOrder)
@@ -58,7 +78,46 @@ public class WorkResultService {
                 .workTime(LocalDateTime.now())
                 .build();
 
-        return workResultRepository.save(result);
+        workResultRepository.save(result);
+
+        // Update WorkOrder status based on progress
+        updateWorkOrderStatus(workOrder, completedCount + 1, processList.size());
+
+        return result;
+    }
+
+    /**
+     * Calculate defect rate
+     */
+    private double calculateDefectRate(int goodQty, int badQty) {
+        int totalQty = goodQty + badQty;
+        if (totalQty == 0) {
+            return 0.0;
+        }
+        return (double) badQty / totalQty;
+    }
+
+    /**
+     * Update WorkOrder status
+     * - STARTED -> IN_PROGRESS -> COMPLETED
+     */
+    private void updateWorkOrderStatus(WorkOrder workOrder, int completedCount, int totalProcessCount) {
+        WorkOrderStatus newStatus;
+
+        if (completedCount == 1) {
+            newStatus = WorkOrderStatus.STARTED;
+        } else if (completedCount < totalProcessCount) {
+            newStatus = WorkOrderStatus.IN_PROGRESS;
+        } else {
+            newStatus = WorkOrderStatus.COMPLETED;
+            workOrder.setFinishTime(LocalDateTime.now());
+        }
+
+        workOrder.setStatus(newStatus);
+        workOrderRepository.save(workOrder);
+
+        log.info("WorkOrder {} status updated: {} ({}/{})",
+                workOrder.getId(), newStatus, completedCount, totalProcessCount);
     }
 
 }
