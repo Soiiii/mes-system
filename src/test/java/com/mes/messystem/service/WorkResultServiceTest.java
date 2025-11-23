@@ -1,9 +1,6 @@
 package com.mes.messystem.service;
 
-import com.mes.messystem.domain.ProcessEntity;
-import com.mes.messystem.domain.Product;
-import com.mes.messystem.domain.WorkOrder;
-import com.mes.messystem.domain.WorkResult;
+import com.mes.messystem.domain.*;
 import com.mes.messystem.repository.ProcessRepository;
 import com.mes.messystem.repository.ProductRepository;
 import com.mes.messystem.repository.WorkOrderRepository;
@@ -117,6 +114,121 @@ public class WorkResultServiceTest {
                 IllegalArgumentException.class,
                 () -> workResultService.completeProcess(workOrderId, assemblyId, 10, 0)
         );
+    }
+
+    @Test
+    void testWorkOrderStatusUpdates() {
+        // Given: Check the initial WorkOrder status
+        WorkOrder workOrder = workOrderRepository.findById(workOrderId).orElseThrow();
+        assertNull(workOrder.getStatus()); // 초기 상태는 null
+
+        // When: First process is completed (Cutting)
+        workResultService.completeProcess(workOrderId, cuttingId, 10, 0);
+
+        // Then: Status changes to STARTED
+        workOrder = workOrderRepository.findById(workOrderId).orElseThrow();
+        assertEquals(WorkOrderStatus.STARTED, workOrder.getStatus());
+
+        // When: Last process is completed (Assembly)
+        workResultService.completeProcess(workOrderId, assemblyId, 8, 2);
+
+        // Then: Status changes to COMPLETED and finishTime is set
+        workOrder = workOrderRepository.findById(workOrderId).orElseThrow();
+        assertEquals(WorkOrderStatus.COMPLETED, workOrder.getStatus());
+        assertNotNull(workOrder.getFinishTime());
+    }
+
+    @Test
+    void testWorkOrderStatusWithThreeProcesses() {
+        // Given: Create a product with 3 processes
+        workResultRepository.deleteAll();
+        workOrderRepository.deleteAll();
+        productRepository.findAll().forEach(product -> {
+            product.getProcesses().clear();
+            productRepository.save(product);
+        });
+        entityManager.flush();
+        productRepository.deleteAll();
+        processRepository.deleteAll();
+
+        ProcessEntity cutting = ProcessEntity.builder()
+                .name("Cutting")
+                .sequence(1)
+                .build();
+
+        ProcessEntity assembly = ProcessEntity.builder()
+                .name("Assembly")
+                .sequence(2)
+                .build();
+
+        ProcessEntity packaging = ProcessEntity.builder()
+                .name("Packaging")
+                .sequence(3)
+                .build();
+
+        processRepository.save(cutting);
+        processRepository.save(assembly);
+        processRepository.save(packaging);
+
+        Product product = Product.builder()
+                .name("TestProduct")
+                .build();
+
+        product.addProcess(cutting);
+        product.addProcess(assembly);
+        product.addProcess(packaging);
+        productRepository.save(product);
+
+        WorkOrder wo = new WorkOrder();
+        wo.setProduct(product);
+        workOrderRepository.save(wo);
+
+        Long woId = wo.getId();
+        Long cuttingId = cutting.getId();
+        Long assemblyId = assembly.getId();
+        Long packagingId = packaging.getId();
+
+        // When & Then: First process done → STARTED
+        workResultService.completeProcess(woId, cuttingId, 10, 0);
+        wo = workOrderRepository.findById(woId).orElseThrow();
+        assertEquals(WorkOrderStatus.STARTED, wo.getStatus());
+
+        // When & Then: Second process done → IN_PROGRESS
+        workResultService.completeProcess(woId, assemblyId, 10, 0);
+        wo = workOrderRepository.findById(woId).orElseThrow();
+        assertEquals(WorkOrderStatus.IN_PROGRESS, wo.getStatus());
+
+        // When & Then: Last process done → COMPLETED
+        workResultService.completeProcess(woId, packagingId, 10, 0);
+        wo = workOrderRepository.findById(woId).orElseThrow();
+        assertEquals(WorkOrderStatus.COMPLETED, wo.getStatus());
+        assertNotNull(wo.getFinishTime());
+    }
+
+    @Test
+    void testWorkOrderRejectedByHighDefectRate() {
+        // When: Trying to complete a process with a defect rate of 30% or higher
+        // Example: 4 defects out of 10 units = 40%
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> workResultService.completeProcess(workOrderId, cuttingId, 6, 4)
+        );
+
+        // Then: Status changes to REJECTED and an exception is thrown
+        assertTrue(exception.getMessage().contains("Defect rate too high"));
+        WorkOrder workOrder = workOrderRepository.findById(workOrderId).orElseThrow();
+        assertEquals(WorkOrderStatus.REJECTED, workOrder.getStatus());
+    }
+
+    @Test
+    void testWorkOrderAcceptedByLowDefectRate() {
+        // When: Defect rate is below 30% (2 defects out of 10 = 20%)
+        WorkResult result = workResultService.completeProcess(workOrderId, cuttingId, 8, 2);
+
+        // Then: Process completes normally and status becomes STARTED
+        assertNotNull(result);
+        WorkOrder workOrder = workOrderRepository.findById(workOrderId).orElseThrow();
+        assertEquals(WorkOrderStatus.STARTED, workOrder.getStatus());
     }
 
 }
