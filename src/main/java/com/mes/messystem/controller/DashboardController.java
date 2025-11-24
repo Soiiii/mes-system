@@ -77,7 +77,7 @@ public class DashboardController {
      * Updates every 3 seconds
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamDashboard() {
+    public SseEmitter streamDashboard(@RequestParam(defaultValue = "3000") long interval) {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
         emitters.add(emitter);
 
@@ -120,7 +120,7 @@ public class DashboardController {
                 log.error("Error sending SSE update", e);
                 emitter.completeWithError(e);
             }
-        }, 3, 3, TimeUnit.SECONDS);
+        }, interval, interval, TimeUnit.MILLISECONDS);
 
         return emitter;
     }
