@@ -1,9 +1,11 @@
 package com.mes.messystem.service;
 
+import com.mes.messystem.controller.WebSocketNotificationController;
 import com.mes.messystem.domain.ProcessEntity;
 import com.mes.messystem.domain.WorkOrder;
 import com.mes.messystem.domain.WorkOrderStatus;
 import com.mes.messystem.domain.WorkResult;
+import com.mes.messystem.dto.WorkProgressInfo;
 import com.mes.messystem.repository.ProcessRepository;
 import com.mes.messystem.repository.WorkOrderRepository;
 import com.mes.messystem.repository.WorkResultRepository;
@@ -24,6 +26,7 @@ public class WorkResultService {
     private final WorkOrderRepository workOrderRepository;
     private final ProcessRepository processRepository;
     private final WorkResultRepository workResultRepository;
+    private final WebSocketNotificationController webSocketNotificationController;
 
     // Defect rate threshold (over than 30% REJECTED)
     private static final double DEFECT_RATE_THRESHOLD = 0.30;
@@ -118,6 +121,30 @@ public class WorkResultService {
 
         log.info("WorkOrder {} status updated: {} ({}/{})",
                 workOrder.getId(), newStatus, completedCount, totalProcessCount);
+
+        // Broadcast work progress update via WebSocket
+        double progressPercentage = totalProcessCount > 0
+                ? (double) completedCount / totalProcessCount * 100
+                : 0.0;
+
+        WorkProgressInfo progressInfo = WorkProgressInfo.builder()
+                .workOrderId(workOrder.getId())
+                .productName(workOrder.getProduct().getName())
+                .status(newStatus)
+                .totalProcesses(totalProcessCount)
+                .completedProcesses(completedCount)
+                .progressPercentage(Math.round(progressPercentage * 100.0) / 100.0)
+                .build();
+
+        webSocketNotificationController.broadcastWorkProgressUpdate(progressInfo);
+
+        // Send alert if REJECTED
+        if (newStatus == WorkOrderStatus.REJECTED) {
+            webSocketNotificationController.broadcastAlert(
+                    "WorkOrder #" + workOrder.getId() + " rejected due to high defect rate",
+                    "ERROR"
+            );
+        }
     }
 
 }

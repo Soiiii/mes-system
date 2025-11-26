@@ -1,8 +1,11 @@
 package com.mes.messystem.service;
 
+import com.mes.messystem.controller.WebSocketNotificationController;
 import com.mes.messystem.domain.Equipment;
 import com.mes.messystem.domain.EquipmentData;
+import com.mes.messystem.domain.EquipmentStatus;
 import com.mes.messystem.dto.EquipmentDataRequest;
+import com.mes.messystem.dto.EquipmentStatusSummary;
 import com.mes.messystem.repository.EquipmentDataRepository;
 import com.mes.messystem.repository.EquipmentRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ public class EquipmentDataService {
 
     private final EquipmentDataRepository equipmentDataRepository;
     private final EquipmentRepository equipmentRepository;
+    private final WebSocketNotificationController webSocketNotificationController;
 
     @Transactional
     public EquipmentData saveEquipmentData(EquipmentDataRequest request) {
@@ -41,6 +45,27 @@ public class EquipmentDataService {
                 saved.getStatus(),
                 saved.getTemperature(),
                 saved.getProductionSpeed());
+
+        // Broadcast equipment status update via WebSocket
+        EquipmentStatusSummary statusSummary = EquipmentStatusSummary.builder()
+                .equipmentId(equipment.getId())
+                .equipmentName(equipment.getName())
+                .location(equipment.getLocation())
+                .status(saved.getStatus())
+                .temperature(saved.getTemperature())
+                .productionSpeed(saved.getProductionSpeed())
+                .lastUpdated(saved.getTimestamp())
+                .build();
+
+        webSocketNotificationController.broadcastEquipmentUpdate(statusSummary);
+
+        // Send alert if equipment is in ALARM state
+        if (saved.getStatus() == EquipmentStatus.ALARM) {
+            webSocketNotificationController.broadcastAlert(
+                    "Equipment " + equipment.getName() + " is in ALARM state!",
+                    "WARNING"
+            );
+        }
 
         return saved;
     }
