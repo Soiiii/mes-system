@@ -74,4 +74,19 @@ export const dashboardApi = {
   getDefectRate: () => api.get('/dashboard/defect-rate'),
 };
 
+// LOT API
+export const lotsApi = {
+  getAll: () => api.get('/lots'),
+  getById: (id) => api.get(`/lots/${id}`),
+  getByLotNumber: (lotNumber) => api.get(`/lots/number/${lotNumber}`),
+  create: (data) => api.post('/lots', data),
+  updateStatus: (id, status) => api.put(`/lots/${id}/status`, null, { params: { status } }),
+  addHistory: (data) => api.post('/lots/history', data),
+  getHistory: (id) => api.get(`/lots/${id}/history`),
+  getHistoryByLotNumber: (lotNumber) => api.get(`/lots/number/${lotNumber}/history`),
+  getByProduct: (productId) => api.get(`/lots/product/${productId}`),
+  getByWorkOrder: (workOrderId) => api.get(`/lots/work-order/${workOrderId}`),
+  search: (keyword) => api.get('/lots/search', { params: { keyword } }),
+};
+
 export default api;

@@ -23,6 +23,7 @@ import {
   Sensors as SensorsIcon,
   BugReport as BugReportIcon,
   Category as CategoryIcon,
+  QrCode as QrCodeIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -32,6 +33,7 @@ const menuItems = [
   { text: 'Work Orders', icon: <AssignmentIcon />, path: '/work-orders' },
   { text: 'Products', icon: <InventoryIcon />, path: '/products' },
   { text: 'Processes', icon: <SettingsIcon />, path: '/processes' },
+  { text: 'LOT Tracking', icon: <QrCodeIcon />, path: '/lot-tracking' },
   { text: 'Equipment Monitor', icon: <SensorsIcon />, path: '/equipment' },
   { text: 'Defects', icon: <BugReportIcon />, path: '/defects' },
 ];
