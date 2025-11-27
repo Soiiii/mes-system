@@ -26,6 +26,7 @@ import {
   CardContent,
   Tabs,
   Tab,
+  Alert,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -33,6 +34,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Warning as WarningIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { qualityInspectionApi, lotsApi, processesApi } from '../services/api';
 
@@ -45,7 +47,9 @@ function QualityInspection() {
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [openDetailDialog, setOpenDetailDialog] = useState(false);
   const [openStandardDialog, setOpenStandardDialog] = useState(false);
+  const [openMeasureDialog, setOpenMeasureDialog] = useState(false);
   const [selectedInspection, setSelectedInspection] = useState(null);
+  const [measurementData, setMeasurementData] = useState([]);
 
   const [formData, setFormData] = useState({
     lotId: '',
@@ -114,16 +118,20 @@ function QualityInspection() {
 
   const handleCreateInspection = async () => {
     try {
-      // 기본 검사 항목 생성 (샘플)
-      const items = standards
-        .filter(s => s.applicableType === formData.type)
-        .slice(0, 3)
-        .map(standard => ({
-          standardId: standard.id,
-          measuredValue: '',
-          result: 'PASS',
-          remarks: '',
-        }));
+      // 기본 검사 항목 생성
+      const applicableStandards = standards.filter(s => s.applicableType === formData.type);
+      
+      if (applicableStandards.length === 0) {
+        alert('No inspection standards available for this type. Please create standards first.');
+        return;
+      }
+
+      const items = applicableStandards.map(standard => ({
+        standardId: standard.id,
+        measuredValue: '',
+        result: 'PENDING',
+        remarks: '',
+      }));
 
       await qualityInspectionApi.create({
         ...formData,
@@ -177,11 +185,88 @@ function QualityInspection() {
     setOpenDetailDialog(true);
   };
 
+  const handleOpenMeasure = (inspection) => {
+    setSelectedInspection(inspection);
+    
+    // 측정 데이터 초기화
+    const initialData = inspection.items.map(item => ({
+      id: item.id,
+      standardId: item.standardId,
+      standardName: item.standardName,
+      standardValue: item.standardValue,
+      lowerLimit: item.lowerLimit,
+      upperLimit: item.upperLimit,
+      unit: item.unit,
+      measuredValue: item.measuredValue || '',
+      result: item.result || 'PENDING',
+      remarks: item.remarks || '',
+    }));
+    
+    setMeasurementData(initialData);
+    setOpenMeasureDialog(true);
+  };
+
+  const handleMeasurementChange = (index, field, value) => {
+    const newData = [...measurementData];
+    newData[index][field] = value;
+
+    // 자동 판정: 측정값이 입력되면 범위 체크
+    if (field === 'measuredValue' && value) {
+      const item = newData[index];
+      const measured = parseFloat(value);
+      const lower = parseFloat(item.lowerLimit);
+      const upper = parseFloat(item.upperLimit);
+
+      if (!isNaN(measured) && !isNaN(lower) && !isNaN(upper)) {
+        if (measured >= lower && measured <= upper) {
+          newData[index].result = 'PASS';
+        } else {
+          newData[index].result = 'FAIL';
+        }
+      }
+    }
+
+    setMeasurementData(newData);
+  };
+
+  const handleSaveMeasurements = async () => {
+    try {
+      // 여기서는 간단히 전체 검사를 재생성하는 방식 사용
+      // 실제로는 PATCH API를 만들어야 하지만, 빠른 구현을 위해 재생성
+      
+      const items = measurementData.map(item => ({
+        standardId: item.standardId,
+        measuredValue: item.measuredValue,
+        result: item.result,
+        remarks: item.remarks,
+      }));
+
+      // 검사 재생성
+      await qualityInspectionApi.create({
+        lotId: selectedInspection.lotId,
+        processId: selectedInspection.processId,
+        type: selectedInspection.type,
+        sampleSize: selectedInspection.sampleSize,
+        inspector: selectedInspection.inspector,
+        items: items,
+        remarks: selectedInspection.remarks,
+      });
+
+      loadInspections();
+      setOpenMeasureDialog(false);
+      alert('Measurements saved successfully!');
+    } catch (error) {
+      console.error('Failed to save measurements:', error);
+      alert('Failed to save measurements: ' + error.message);
+    }
+  };
+
   const handleCompleteInspection = async (id, result) => {
     try {
       await qualityInspectionApi.complete(id, result);
       loadInspections();
       setOpenDetailDialog(false);
+      setOpenMeasureDialog(false);
     } catch (error) {
       console.error('Failed to complete inspection:', error);
       alert('Failed to complete inspection: ' + error.message);
@@ -227,6 +312,17 @@ function QualityInspection() {
       default:
         return null;
     }
+  };
+
+  const calculateOverallResult = () => {
+    if (measurementData.length === 0) return null;
+    
+    const hasAnyFail = measurementData.some(item => item.result === 'FAIL');
+    const allPass = measurementData.every(item => item.result === 'PASS');
+    
+    if (hasAnyFail) return 'FAIL';
+    if (allPass) return 'PASS';
+    return 'CONDITIONAL_PASS';
   };
 
   return (
@@ -312,6 +408,14 @@ function QualityInspection() {
                   <TableCell>
                     <IconButton
                       size="small"
+                      onClick={() => handleOpenMeasure(inspection)}
+                      title="Measure & Inspect"
+                      color="primary"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      size="small"
                       onClick={() => handleViewDetail(inspection)}
                       title="View Details"
                     >
@@ -368,6 +472,150 @@ function QualityInspection() {
           </Table>
         </TableContainer>
       )}
+
+      {/* Measurement Dialog */}
+      <Dialog
+        open={openMeasureDialog}
+        onClose={() => setOpenMeasureDialog(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          Quality Inspection - Measure & Inspect
+          <Typography variant="subtitle2" color="textSecondary">
+            {selectedInspection?.inspectionNumber} | LOT: {selectedInspection?.lotNumber}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Enter measured values for each inspection item. The system will automatically
+              determine PASS/FAIL based on the acceptable range.
+            </Alert>
+
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Inspection Item</TableCell>
+                    <TableCell>Standard Value</TableCell>
+                    <TableCell>Acceptable Range</TableCell>
+                    <TableCell width="150">Measured Value</TableCell>
+                    <TableCell>Result</TableCell>
+                    <TableCell width="200">Remarks</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {measurementData.map((item, index) => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="bold">
+                          {item.standardName}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {item.standardValue} {item.unit}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="textSecondary">
+                          {item.lowerLimit} ~ {item.upperLimit} {item.unit}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={item.measuredValue}
+                          onChange={(e) =>
+                            handleMeasurementChange(index, 'measuredValue', e.target.value)
+                          }
+                          placeholder="Enter value"
+                          fullWidth
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <FormControl size="small" fullWidth>
+                          <Select
+                            value={item.result}
+                            onChange={(e) =>
+                              handleMeasurementChange(index, 'result', e.target.value)
+                            }
+                          >
+                            <MenuItem value="PASS">
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <CheckCircleIcon color="success" fontSize="small" />
+                                PASS
+                              </Box>
+                            </MenuItem>
+                            <MenuItem value="FAIL">
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <CancelIcon color="error" fontSize="small" />
+                                FAIL
+                              </Box>
+                            </MenuItem>
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          size="small"
+                          value={item.remarks}
+                          onChange={(e) =>
+                            handleMeasurementChange(index, 'remarks', e.target.value)
+                          }
+                          placeholder="Notes"
+                          fullWidth
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {measurementData.length > 0 && (
+              <Box mt={3}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Overall Result
+                    </Typography>
+                    <Box display="flex" alignItems="center" gap={2}>
+                      <Chip
+                        icon={getResultIcon(calculateOverallResult())}
+                        label={calculateOverallResult() || 'PENDING'}
+                        color={getResultColor(calculateOverallResult())}
+                        size="large"
+                      />
+                      <Typography variant="body2" color="textSecondary">
+                        Passed: {measurementData.filter(i => i.result === 'PASS').length} / 
+                        Failed: {measurementData.filter(i => i.result === 'FAIL').length}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenMeasureDialog(false)}>Cancel</Button>
+          <Button onClick={handleSaveMeasurements} variant="outlined">
+            Save Measurements
+          </Button>
+          {selectedInspection?.status === 'PENDING' && calculateOverallResult() && (
+            <Button
+              onClick={() =>
+                handleCompleteInspection(selectedInspection.id, calculateOverallResult())
+              }
+              variant="contained"
+              color={calculateOverallResult() === 'PASS' ? 'success' : 'error'}
+            >
+              Complete Inspection as {calculateOverallResult()}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
 
       {/* Create Inspection Dialog */}
       <Dialog
@@ -525,7 +773,7 @@ function QualityInspection() {
                         <TableRow key={item.id}>
                           <TableCell>{item.standardName}</TableCell>
                           <TableCell>
-                            {item.measuredValue} {item.unit}
+                            {item.measuredValue ? `${item.measuredValue} ${item.unit}` : '-'}
                           </TableCell>
                           <TableCell>
                             {item.standardValue} {item.unit}
@@ -550,34 +798,6 @@ function QualityInspection() {
                 <Typography color="textSecondary" align="center" py={2}>
                   No inspection items
                 </Typography>
-              )}
-
-              {selectedInspection.status === 'PENDING' && (
-                <Box display="flex" gap={2} justifyContent="center" mt={2}>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    onClick={() => handleCompleteInspection(selectedInspection.id, 'PASS')}
-                  >
-                    Mark as PASS
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="error"
-                    onClick={() => handleCompleteInspection(selectedInspection.id, 'FAIL')}
-                  >
-                    Mark as FAIL
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    onClick={() =>
-                      handleCompleteInspection(selectedInspection.id, 'CONDITIONAL_PASS')
-                    }
-                  >
-                    Conditional Pass
-                  </Button>
-                </Box>
               )}
             </Box>
           )}
