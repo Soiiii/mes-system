@@ -16,8 +16,10 @@ public class Product {
     private Long id;
 
     private String name;
+    private String code;
+    private String description;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "product_process",
         joinColumns = @JoinColumn(name = "product_id"),

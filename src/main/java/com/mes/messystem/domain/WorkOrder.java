@@ -3,6 +3,7 @@ package com.mes.messystem.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -25,4 +26,7 @@ public class WorkOrder {
 
     private LocalDateTime startTime;
     private LocalDateTime finishTime;
+
+    private LocalDate plannedStartDate;
+    private LocalDate plannedEndDate;
 }

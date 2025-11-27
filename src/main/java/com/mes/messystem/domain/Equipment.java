@@ -19,5 +19,9 @@ public class Equipment {
     @Enumerated(EnumType.STRING)
     private EquipmentType type;
 
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private EquipmentStatus status = EquipmentStatus.IDLE;
+
     private Integer sequence;
 }

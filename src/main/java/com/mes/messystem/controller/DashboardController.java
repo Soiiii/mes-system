@@ -73,6 +73,28 @@ public class DashboardController {
     }
 
     /**
+     * Get dashboard stats (for frontend)
+     */
+    @GetMapping("/stats")
+    public ResponseEntity<TodayProductionStats> getStats() {
+        TodayProductionStats stats = dashboardService.getTodayProductionStats();
+        return ResponseEntity.ok(stats);
+    }
+
+    /**
+     * Get defect rate (for frontend)
+     */
+    @GetMapping("/defect-rate")
+    public ResponseEntity<java.util.Map<String, Object>> getDefectRate() {
+        TodayProductionStats stats = dashboardService.getTodayProductionStats();
+        int goodCount = stats.getProductionCount() - stats.getDefectCount();
+        return ResponseEntity.ok(java.util.Map.of(
+                "goodCount", goodCount,
+                "defectCount", stats.getDefectCount()
+        ));
+    }
+
+    /**
      * SSE endpoint for real-time dashboard updates
      * Updates every 3 seconds
      */
