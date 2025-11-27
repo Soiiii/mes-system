@@ -8,6 +8,7 @@ import Processes from './pages/Processes';
 import EquipmentMonitor from './pages/EquipmentMonitor';
 import Defects from './pages/Defects';
 import LotTracking from './pages/LotTracking';
+import QualityInspection from './pages/QualityInspection';
 
 const theme = createTheme({
   palette: {
@@ -31,9 +32,10 @@ function App() {
             <Route path="work-orders" element={<WorkOrders />} />
             <Route path="products" element={<Products />} />
             <Route path="processes" element={<Processes />} />
+            <Route path="lot-tracking" element={<LotTracking />} />
+            <Route path="quality-inspection" element={<QualityInspection />} />
             <Route path="equipment" element={<EquipmentMonitor />} />
             <Route path="defects" element={<Defects />} />
-            <Route path="lot-tracking" element={<LotTracking />} />
           </Route>
         </Routes>
       </BrowserRouter>

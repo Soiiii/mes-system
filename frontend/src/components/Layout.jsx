@@ -24,6 +24,7 @@ import {
   BugReport as BugReportIcon,
   Category as CategoryIcon,
   QrCode as QrCodeIcon,
+  FactCheck as FactCheckIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -34,6 +35,7 @@ const menuItems = [
   { text: 'Products', icon: <InventoryIcon />, path: '/products' },
   { text: 'Processes', icon: <SettingsIcon />, path: '/processes' },
   { text: 'LOT Tracking', icon: <QrCodeIcon />, path: '/lot-tracking' },
+  { text: 'Quality Inspection', icon: <FactCheckIcon />, path: '/quality-inspection' },
   { text: 'Equipment Monitor', icon: <SensorsIcon />, path: '/equipment' },
   { text: 'Defects', icon: <BugReportIcon />, path: '/defects' },
 ];

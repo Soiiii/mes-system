@@ -89,4 +89,21 @@ export const lotsApi = {
   search: (keyword) => api.get('/lots/search', { params: { keyword } }),
 };
 
+// Quality Inspection API
+export const qualityInspectionApi = {
+  getAll: () => api.get('/quality-inspections'),
+  getById: (id) => api.get(`/quality-inspections/${id}`),
+  create: (data) => api.post('/quality-inspections', data),
+  complete: (id, result) => api.put(`/quality-inspections/${id}/complete`, null, { params: { result } }),
+  getByLot: (lotId) => api.get(`/quality-inspections/lot/${lotId}`),
+  getByType: (type) => api.get(`/quality-inspections/type/${type}`),
+  getByResult: (result) => api.get(`/quality-inspections/result/${result}`),
+  
+  // Standards
+  getAllStandards: () => api.get('/quality-inspections/standards'),
+  createStandard: (data) => api.post('/quality-inspections/standards', data),
+  getStandardsByProduct: (productId, type) => 
+    api.get(`/quality-inspections/standards/product/${productId}`, { params: { type } }),
+};
+
 export default api;
