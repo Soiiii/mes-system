@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -20,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = "*")
 public class DashboardController {
 
     private final DashboardService dashboardService;
@@ -117,7 +118,12 @@ public class DashboardController {
 
         emitter.onError(e -> {
             emitters.remove(emitter);
-            log.error("SSE connection error. Remaining connections: {}", emitters.size(), e);
+            // Only log if it's not a client disconnect (broken pipe)
+            if (!(e instanceof AsyncRequestNotUsableException)) {
+                log.error("SSE connection error. Remaining connections: {}", emitters.size(), e);
+            } else {
+                log.debug("Client disconnected from SSE. Remaining connections: {}", emitters.size());
+            }
         });
 
         // Send initial data
@@ -134,13 +140,20 @@ public class DashboardController {
         // Schedule periodic updates every 3 seconds
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                DashboardResponse data = dashboardService.getDashboardData();
-                emitter.send(SseEmitter.event()
-                        .name("dashboard-update")
-                        .data(data));
+                if (emitters.contains(emitter)) {
+                    DashboardResponse data = dashboardService.getDashboardData();
+                    emitter.send(SseEmitter.event()
+                            .name("dashboard-update")
+                            .data(data));
+                }
             } catch (IOException e) {
-                log.error("Error sending SSE update", e);
+                // Client disconnected - this is normal, just remove the emitter
+                emitters.remove(emitter);
+                log.debug("Client disconnected from SSE stream");
+            } catch (Exception e) {
+                log.error("Unexpected error sending SSE update", e);
                 emitter.completeWithError(e);
+                emitters.remove(emitter);
             }
         }, interval, interval, TimeUnit.MILLISECONDS);
 
