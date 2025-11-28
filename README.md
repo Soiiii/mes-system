@@ -274,3 +274,4 @@ allowCredentials=true 시 와일드카드 불가 → allowedOriginPatterns 사�
 - [ ] 재고 관리 연동
 - [ ] Excel/PDF 리포트
 - [ ] 모바일 최적화
+
