@@ -6,6 +6,7 @@ import com.mes.messystem.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,12 +17,14 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class DashboardService {
 
-    private final WorkResultRepository workResultRepository;
+    private final LotHistoryRepository lotHistoryRepository;
     private final EquipmentDataRepository equipmentDataRepository;
     private final WorkOrderRepository workOrderRepository;
     private final EquipmentRepository equipmentRepository;
+    private final LotRepository lotRepository;
 
     /**
      * Get comprehensive dashboard data
@@ -42,20 +45,25 @@ public class DashboardService {
         LocalDateTime startOfDay = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
         LocalDateTime endOfDay = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
 
-        List<WorkResult> todayResults = workResultRepository.findAll().stream()
-                .filter(wr -> wr.getWorkTime() != null)
-                .filter(wr -> wr.getWorkTime().isAfter(startOfDay) && wr.getWorkTime().isBefore(endOfDay))
+        List<LotHistory> todayHistories = lotHistoryRepository.findAll().stream()
+                .filter(lh -> lh.getProcessedAt() != null)
+                .filter(lh -> lh.getProcessedAt().isAfter(startOfDay) && lh.getProcessedAt().isBefore(endOfDay))
                 .toList();
 
-        int totalGood = todayResults.stream().mapToInt(WorkResult::getGoodQty).sum();
-        int totalBad = todayResults.stream().mapToInt(WorkResult::getBadQty).sum();
-        int total = totalGood + totalBad;
-
-        double defectRate = total > 0 ? (double) totalBad / total : 0.0;
+        int totalProduced = todayHistories.stream()
+                .mapToInt(lh -> lh.getOutputQuantity() != null ? lh.getOutputQuantity() : 0)
+                .sum();
+        
+        int totalDefects = todayHistories.stream()
+                .mapToInt(lh -> lh.getDefectQuantity() != null ? lh.getDefectQuantity() : 0)
+                .sum();
+        
+        int total = totalProduced + totalDefects;
+        double defectRate = total > 0 ? (double) totalDefects / total * 100 : 0.0;
 
         return TodayProductionStats.builder()
-                .totalGoodQty(totalGood)
-                .totalBadQty(totalBad)
+                .totalGoodQty(totalProduced)
+                .totalBadQty(totalDefects)
                 .totalQty(total)
                 .defectRate(defectRate)
                 .build();
@@ -65,29 +73,33 @@ public class DashboardService {
      * Calculate defect rate by product
      */
     public List<ProductDefectRate> getProductDefectRates() {
-        List<WorkResult> allResults = workResultRepository.findAll();
+        List<LotHistory> allHistories = lotHistoryRepository.findAll();
 
-        Map<Long, List<WorkResult>> resultsByProduct = allResults.stream()
-                .filter(wr -> wr.getWorkOrder() != null && wr.getWorkOrder().getProduct() != null)
-                .collect(Collectors.groupingBy(wr -> wr.getWorkOrder().getProduct().getId()));
+        Map<Long, List<LotHistory>> historiesByProduct = allHistories.stream()
+                .filter(lh -> lh.getLot() != null && lh.getLot().getProduct() != null)
+                .collect(Collectors.groupingBy(lh -> lh.getLot().getProduct().getId()));
 
-        return resultsByProduct.entrySet().stream()
+        return historiesByProduct.entrySet().stream()
                 .map(entry -> {
                     Long productId = entry.getKey();
-                    List<WorkResult> results = entry.getValue();
+                    List<LotHistory> histories = entry.getValue();
 
-                    String productName = results.get(0).getWorkOrder().getProduct().getName();
-                    int totalGood = results.stream().mapToInt(WorkResult::getGoodQty).sum();
-                    int totalBad = results.stream().mapToInt(WorkResult::getBadQty).sum();
-                    int total = totalGood + totalBad;
+                    String productName = histories.get(0).getLot().getProduct().getName();
+                    int totalProduced = histories.stream()
+                            .mapToInt(lh -> lh.getOutputQuantity() != null ? lh.getOutputQuantity() : 0)
+                            .sum();
+                    int totalDefects = histories.stream()
+                            .mapToInt(lh -> lh.getDefectQuantity() != null ? lh.getDefectQuantity() : 0)
+                            .sum();
+                    int total = totalProduced + totalDefects;
 
-                    double defectRate = total > 0 ? (double) totalBad / total : 0.0;
+                    double defectRate = total > 0 ? (double) totalDefects / total * 100 : 0.0;
 
                     return ProductDefectRate.builder()
                             .productId(productId)
                             .productName(productName)
-                            .totalGoodQty(totalGood)
-                            .totalBadQty(totalBad)
+                            .totalGoodQty(totalProduced)
+                            .totalBadQty(totalDefects)
                             .defectRate(defectRate)
                             .build();
                 })
@@ -112,7 +124,7 @@ public class DashboardService {
                             .equipmentId(equipment.getId())
                             .equipmentName(equipment.getName())
                             .location(equipment.getLocation())
-                            .status(latest != null ? latest.getStatus() : null)
+                            .status(equipment.getStatus())
                             .temperature(latest != null ? latest.getTemperature() : null)
                             .productionSpeed(latest != null ? latest.getProductionSpeed() : null)
                             .lastUpdated(latest != null ? latest.getTimestamp() : null)
@@ -130,20 +142,23 @@ public class DashboardService {
         return workOrders.stream()
                 .filter(wo -> wo.getProduct() != null)
                 .map(wo -> {
-                    int totalProcesses = wo.getProduct().getProcesses().size();
-                    List<WorkResult> completed = workResultRepository.findByWorkOrderId(wo.getId());
-                    int completedProcesses = completed.size();
+                    // LOT 기반으로 진행률 계산
+                    List<Lot> lots = lotRepository.findByWorkOrderId(wo.getId());
+                    int totalLots = lots.size();
+                    int completedLots = (int) lots.stream()
+                            .filter(lot -> lot.getStatus() == LotStatus.COMPLETED)
+                            .count();
 
-                    double progressPercentage = totalProcesses > 0
-                            ? (double) completedProcesses / totalProcesses * 100
+                    double progressPercentage = totalLots > 0
+                            ? (double) completedLots / totalLots * 100
                             : 0.0;
 
                     return WorkProgressInfo.builder()
                             .workOrderId(wo.getId())
                             .productName(wo.getProduct().getName())
                             .status(wo.getStatus())
-                            .totalProcesses(totalProcesses)
-                            .completedProcesses(completedProcesses)
+                            .totalProcesses(totalLots)
+                            .completedProcesses(completedLots)
                             .progressPercentage(Math.round(progressPercentage * 100.0) / 100.0)
                             .build();
                 })
