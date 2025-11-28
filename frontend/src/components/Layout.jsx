@@ -25,16 +25,20 @@ import {
   Category as CategoryIcon,
   QrCode as QrCodeIcon,
   FactCheck as FactCheckIcon,
+  Engineering as EngineeringIcon,
+  Assessment as AssessmentIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
 
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+  { text: 'Statistics', icon: <AssessmentIcon />, path: '/statistics' },
   { text: 'Work Orders', icon: <AssignmentIcon />, path: '/work-orders' },
   { text: 'Products', icon: <InventoryIcon />, path: '/products' },
   { text: 'Processes', icon: <SettingsIcon />, path: '/processes' },
   { text: 'LOT Tracking', icon: <QrCodeIcon />, path: '/lot-tracking' },
+  { text: 'Process Execution', icon: <EngineeringIcon />, path: '/process-execution' },
   { text: 'Quality Inspection', icon: <FactCheckIcon />, path: '/quality-inspection' },
   { text: 'Equipment Monitor', icon: <SensorsIcon />, path: '/equipment' },
   { text: 'Defects', icon: <BugReportIcon />, path: '/defects' },
