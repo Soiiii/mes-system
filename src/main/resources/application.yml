@@ -4,11 +4,21 @@ spring:
     username: root
     password: asdf1234
     driver-class-name: com.mysql.cj.jdbc.Driver
+  profiles:
+    active: default
 
   jpa:
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
-        format_sql: true
-    show-sql: true
+        format_sql: false
+    show-sql: false
+
+logging:
+  level:
+    root: INFO
+    com.mes.messystem: INFO
+    org.springframework.web: WARN
+    org.hibernate: WARN
+    org.hibernate.SQL: WARN
