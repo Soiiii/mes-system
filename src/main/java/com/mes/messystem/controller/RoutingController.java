@@ -10,7 +10,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/routing")
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = "*")
 public class RoutingController {
 
     private final ProcessRoutingRepository routingRepository;
