@@ -106,4 +106,9 @@ export const qualityInspectionApi = {
     api.get(`/quality-inspections/standards/product/${productId}`, { params: { type } }),
 };
 
+// Statistics API
+export const statisticsApi = {
+  getProductionStatistics: () => api.get('/statistics/production'),
+};
+
 export default api;
