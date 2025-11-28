@@ -29,9 +29,11 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
+        log.info("DataLoader starting...");
         loadEquipmentData();
         loadInspectionStandardsData();
         loadCompleteFlowData();
+        log.info("DataLoader completed!");
     }
 
     private void loadEquipmentData() {
@@ -237,6 +239,16 @@ public class DataLoader implements CommandLineRunner {
     }
 
     private void loadCompleteFlowData() {
+        log.info("Checking data... Products: {}, LOTs: {}", 
+            productRepository.count(), lotRepository.count());
+        
+        // 이미 데이터가 있으면 스킵
+        if (productRepository.count() > 0 && lotRepository.count() > 0) {
+            log.info("Sample data already exists. Skipping data loading.");
+            return;
+        }
+        
+        // Products가 없으면 전체 데이터 생성
         if (productRepository.count() == 0) {
             log.info("Loading complete flow sample data...");
 
@@ -411,7 +423,13 @@ public class DataLoader implements CommandLineRunner {
 
     private Lot createLot(Product product, WorkOrder workOrder, int quantity, int sequence) {
         String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String lotNumber = String.format("LOT-%s-%04d", today, sequence + 1);
+        
+        // 오늘 날짜의 기존 LOT 개수를 세어서 시퀀스 결정
+        long todayLotCount = lotRepository.findAll().stream()
+                .filter(lot -> lot.getLotNumber().startsWith("LOT-" + today))
+                .count();
+        
+        String lotNumber = String.format("LOT-%s-%04d", today, todayLotCount + 1);
 
         Lot lot = Lot.builder()
                 .lotNumber(lotNumber)
@@ -479,14 +497,19 @@ public class DataLoader implements CommandLineRunner {
 
             if (withMeasurements) {
                 // 측정값 시뮬레이션
-                double standardVal = Double.parseDouble(standard.getStandardValue());
-                double lowerLimit = Double.parseDouble(standard.getLowerLimit());
-                double upperLimit = Double.parseDouble(standard.getUpperLimit());
-                double range = upperLimit - lowerLimit;
-                
-                // 대부분 PASS가 되도록 범위 내에서 랜덤 생성
-                double randomValue = lowerLimit + (range * 0.3) + (Math.random() * range * 0.4);
-                measuredValue = String.format("%.1f", randomValue);
+                try {
+                    double standardVal = Double.parseDouble(standard.getStandardValue());
+                    double lowerLimit = Double.parseDouble(standard.getLowerLimit());
+                    double upperLimit = Double.parseDouble(standard.getUpperLimit());
+                    double range = upperLimit - lowerLimit;
+                    
+                    // 대부분 PASS가 되도록 범위 내에서 랜덤 생성
+                    double randomValue = lowerLimit + (range * 0.3) + (Math.random() * range * 0.4);
+                    measuredValue = String.format("%.1f", randomValue);
+                } catch (NumberFormatException e) {
+                    // 숫자가 아닌 경우 (예: "Standard") 그대로 사용
+                    measuredValue = standard.getStandardValue();
+                }
                 
                 result = InspectionResult.PASS;
             }
